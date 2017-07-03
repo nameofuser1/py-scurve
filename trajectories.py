@@ -7,6 +7,12 @@ SPEED_ID = 1
 POSITION_ID = 2
 
 
+class PlanningError(Exception):
+
+    def __init__(self, msg):
+        super(Exception, self).__init__(msg)
+
+
 def check_profile_params(x, y, v0, a0, a_max, v_max):
     if a_max is None and v_max is None:
         raise ValueError("Please specify either a_max or v_max")
@@ -17,6 +23,14 @@ def check_profile_params(x, y, v0, a0, a_max, v_max):
         raise ValueError("Number of dimentions in parameters does not match")
 
     return len(x)
+
+
+def trap_plan_with_acceleration(x, y, a0, v_max, a_max):
+    pass
+
+
+def trap_plan_with_time(x, y, v0, a0, v_max, a_max):
+    pass
 
 
 def trapezoidal_profile(x, y, v0, a0, v_max, a_max):
@@ -36,15 +50,15 @@ def trapezoidal_profile(x, y, v0, a0, v_max, a_max):
     SC = []
 
     for i in range(dof):
-        ta = (v_max[i] - v0[i])/a_max[i]
-        sa = a_max[i]*(ta**2)/2 + v0[i]*ta
+        ta = (v_max[i] - v0[i] + 0.0)/(a_max[i] + 0.0)
+        sa = a_max[i]*(ta**2)/2. + (v0[i]*ta)
 
         if y[i] - x[i] < 2*sa:
-            return None
+            raise PlanningError("Failed to plan trapezoidal profile")
 
-        t = (y[i] - x[i] - a_max[i]*(ta**2)-2*v0[i]*ta)/v_max[i] + 2*ta
-        tc = t - 2*ta
-        sc = tc*v_max[i]
+        t = (y[i] - x[i] - a_max[i]*(ta**2) - 2.*v0[i]*ta)/v_max[i] + 2.*ta
+        tc = t - 2.*ta
+        sc = tc*v_max[i]+0.0
 
         T.append(t)
         TA.append(ta)
@@ -52,11 +66,11 @@ def trapezoidal_profile(x, y, v0, a0, v_max, a_max):
         SA.append(sa)
         SC.append(sc)
 
-    print(T)
-    print(TA)
-    print(TC)
-    print(SA)
-    print(SC)
+    print("T: " + str(T))
+    print("TA: " + str(TA))
+    print("TC: " + str(TC))
+    print("SA: " + str(SA))
+    print("SC: " + str(SC))
 
     def trajectory(_t):
         """
@@ -80,12 +94,12 @@ def trapezoidal_profile(x, y, v0, a0, v_max, a_max):
             elif ta <= _t < ta+tc:
                 point[i][ACCELERATION_ID] = 0
                 point[i][SPEED_ID] = v_max[i]
-                point[i][POSITION_ID] = sa + v_max[i]*(_t - ta)
+                point[i][POSITION_ID] = x[i] + sa + v_max[i]*(_t - ta)
 
             elif ta+tc <= _t < t:
                 point[i][ACCELERATION_ID] = -a_max[i]
                 point[i][SPEED_ID] = v_max[i] - a_max[i]*(_t - ta - tc)
-                point[i][POSITION_ID] = sa+sc\
+                point[i][POSITION_ID] = x[i] + sa+sc\
                     - a_max[i]*((_t-ta-tc)**2)/2 + v_max[i]*(_t-ta-tc)
 
             elif _t == t:
@@ -103,7 +117,6 @@ def trapezoidal_profile(x, y, v0, a0, v_max, a_max):
 
 def plot_trajectory(traj, dt):
     timesteps = traj.time[0] / dt
-    print(timesteps)
     dof = traj.dof
 
     time = np.linspace(0, traj.time[0], timesteps)
@@ -112,7 +125,6 @@ def plot_trajectory(traj, dt):
     # profiles[t][d]        --- profile for d DOF at time x[t]
     # profiles[t][d][k]     --- accel/vel/pos profile for d DOF at time x[t]
     profiles = np.asarray(map(traj.trajectory, time))
-    print(profiles.shape)
 
     # NEED
     # profiles[d]       --- profiles for each DOF 0 <= d <= DOF number
@@ -140,6 +152,7 @@ def plot_trajectory(traj, dt):
         plt.title("Position profile")
         plt.plot(time, profile[POSITION_ID][:])
 
+        plt.tight_layout()
         plt.show()
 
 
@@ -191,12 +204,15 @@ class Trajectory(object):
 
 
 if __name__ == "__main__":
-    src = [0]
-    dst = [10]
-    a0 = [0]
-    v0 = [0]
-    a_max = [1]
-    v_max = [2]
+    src = [1+0.0]
+    dst = [6+0.0]
+    a0 = [1+0.0]
+    v0 = [1+0.0]
+    a_max = [2+0.0]
+    v_max = [3+0.0]
 
-    trajectory = Trajectory.plan_trajectory(src, dst, a0, v0, v_max, a_max)
-    plot_trajectory(trajectory, 0.1)
+    try:
+        trajectory = Trajectory.plan_trajectory(src, dst, v0, a0, v_max, a_max)
+        plot_trajectory(trajectory, 0.01)
+    except PlanningError as e:
+        print(e)
