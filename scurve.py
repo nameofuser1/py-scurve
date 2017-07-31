@@ -62,6 +62,29 @@ class ScurvePlanner(TrajectoryPlanner):
 
         return Tj1, Ta, Tj2, Td, Tv
 
+    def __sign_transforms(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        v_min = -v_max
+        a_min = -a_max
+        j_min = -j_max
+
+        s = np.sign(q1 - q0)
+        vs1 = (s+1)/2
+        vs2 = (s-1)/2
+
+        _q0 = s*q0
+        _q1 = s*q1
+        _v0 = s*v0
+        _v1 = s*v1
+        _v_max = vs1*v_max + vs2*v_min
+        _a_max = vs1*a_max + vs2*a_min
+        _j_max = vs1*j_max + vs2*j_min
+
+        print("%f %f %f %f %f %f %f" % (q0, q1, v0, v1, v_max, a_max, j_max))
+        print("%f %f %f %f %f %f %f" % (_q0, _q1, _v0,
+                                        _v1, _v_max, _a_max, _j_max))
+
+        return _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max
+
     def __compute_maximum_speed_not_reached(self, q0, q1, v0, v1,
                                             v_max, a_max, j_max):
         """
@@ -109,6 +132,12 @@ class ScurvePlanner(TrajectoryPlanner):
             raise PlanningError("Trajectory is not feasible")
 
     def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        # For reverting results
+        s = np.sign(q1-q0)
+
+        q0, q1, v0, v1, v_max, a_max, j_max =\
+            self.__sign_transforms(q0, q1, v0, v1, v_max, a_max, j_max)
+
         Tj1, Ta, Tj2, Td, Tv = self.scurve_profile_no_opt(q0, q1, v0, v1,
                                                           v_max, a_max, j_max)
 
@@ -169,9 +198,9 @@ class ScurvePlanner(TrajectoryPlanner):
                 q = q1 - v1*tt - j_max*(tt**3)/6
 
             point = np.zeros((1, 3), dtype=np.float32)
-            point[0][ACCELERATION_ID] = a
-            point[0][SPEED_ID] = v
-            point[0][POSITION_ID] = q
+            point[0][ACCELERATION_ID] = s*a
+            point[0][SPEED_ID] = s*v
+            point[0][POSITION_ID] = s*q
 
             return point
 
@@ -184,10 +213,10 @@ class ScurvePlanner(TrajectoryPlanner):
 
 
 if __name__ == "__main__":
-    q0 = 0.
-    q1 = 20.
-    v0 = 0.
-    v1 = 3.
+    q0 = 2.
+    q1 = -20.
+    v0 = 1.
+    v1 = -5.
     v_max = 20.
     a_max = 20
     j_max = 100.
