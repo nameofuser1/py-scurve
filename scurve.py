@@ -7,7 +7,7 @@ from planner import TrajectoryPlanner
 class ScurvePlanner(TrajectoryPlanner):
 
     def __init__(self):
-        pass
+        self.s = 1
 
     def __scurve_check_possibility(self, q0, q1, v0, v1, v_max, a_max, j_max):
         dv = np.abs(v1 - v0)
@@ -67,14 +67,13 @@ class ScurvePlanner(TrajectoryPlanner):
         a_min = -a_max
         j_min = -j_max
 
-        s = np.sign(q1 - q0)
-        vs1 = (s+1)/2
-        vs2 = (s-1)/2
+        vs1 = (self.s+1)/2
+        vs2 = (self.s-1)/2
 
-        _q0 = s*q0
-        _q1 = s*q1
-        _v0 = s*v0
-        _v1 = s*v1
+        _q0 = self.s*q0
+        _q1 = self.s*q1
+        _v0 = self.s*v0
+        _v1 = self.s*v1
         _v_max = vs1*v_max + vs2*v_min
         _a_max = vs1*a_max + vs2*a_min
         _j_max = vs1*j_max + vs2*j_min
@@ -84,6 +83,15 @@ class ScurvePlanner(TrajectoryPlanner):
                                         _v1, _v_max, _a_max, _j_max))
 
         return _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max
+
+    def __point_sign_transform(self, p):
+        new_p = np.zeros(p.shape, dtype=np.float32)
+
+        for i in range(p.shape[0]):
+            for j in range(p.shape[1]):
+                new_p[i][j] = p[i][j] * self.s
+
+        return new_p
 
     def __compute_maximum_speed_not_reached(self, q0, q1, v0, v1,
                                             v_max, a_max, j_max):
@@ -112,40 +120,11 @@ class ScurvePlanner(TrajectoryPlanner):
 
         return Tj1, Ta, Tj2, Td, Tv
 
-    def scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
-        if self.__scurve_check_possibility(q0, q1, v0, v1, v_max, a_max, j_max):
-            try:
-                Tj1, Ta, Tj2, Td, Tv =\
-                    self.__compute_maximum_speed_reached(q0, q1, v0, v1,
-                                                         v_max, a_max, j_max)
-            except PlanningError as e:
-                print(e)
-
-                Tj1, Ta, Tj2, Td, Tv =\
-                    self.__compute_maximum_speed_not_reached(q0, q1, v0, v1,
-                                                             v_max, a_max,
-                                                             j_max)
-
-            return Tj1, Ta, Tj2, Td, Tv
-
-        else:
-            raise PlanningError("Trajectory is not feasible")
-
-    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max):
-        # For reverting results
-        s = np.sign(q1-q0)
-
-        q0, q1, v0, v1, v_max, a_max, j_max =\
-            self.__sign_transforms(q0, q1, v0, v1, v_max, a_max, j_max)
-
-        Tj1, Ta, Tj2, Td, Tv = self.scurve_profile_no_opt(q0, q1, v0, v1,
-                                                          v_max, a_max, j_max)
-
+    def get_trajectory_func(self, q0, q1, v0, v1, v_max, a_max, j_max,
+                            Ta, Tj1, Td, Tj2, Tv):
         T = Ta + Td + Tv
-
         a_lim_a = j_max*Tj1
         a_lim_d = -j_max*Tj2
-
         v_lim = v0 + (Ta-Tj1)*a_lim_a
 
         def trajectory(t):
@@ -198,15 +177,83 @@ class ScurvePlanner(TrajectoryPlanner):
                 q = q1 - v1*tt - j_max*(tt**3)/6
 
             point = np.zeros((1, 3), dtype=np.float32)
-            point[0][ACCELERATION_ID] = s*a
-            point[0][SPEED_ID] = s*v
-            point[0][POSITION_ID] = s*q
+            point[0][ACCELERATION_ID] = a
+            point[0][SPEED_ID] = v
+            point[0][POSITION_ID] = q
 
-            return point
+            return self.__point_sign_transform(point)
+
+        return trajectory
+
+    def scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        if self.__scurve_check_possibility(q0, q1, v0, v1, v_max, a_max, j_max):
+            try:
+                Tj1, Ta, Tj2, Td, Tv =\
+                    self.__compute_maximum_speed_reached(q0, q1, v0, v1,
+                                                         v_max, a_max, j_max)
+            except PlanningError as e:
+                print(e)
+
+                Tj1, Ta, Tj2, Td, Tv =\
+                    self.__compute_maximum_speed_not_reached(q0, q1, v0, v1,
+                                                             v_max, a_max,
+                                                             j_max)
+
+            return Tj1, Ta, Tj2, Td, Tv
+
+        else:
+            raise PlanningError("Trajectory is not feasible")
+
+    def scurve_profile_const_time(self, q0, q1, v0, v1, v_max,
+                                  a_max, j_max, T, l=0.9, max_iter=2000):
+        _T = 0
+        _a_max = a_max
+        _it_num = 0
+        exceptions_in_row = 0
+
+        while (abs(_T-T) >= EPSILON) and (_a_max >= EPSILON) and\
+                (_it_num < max_iter):
+            try:
+                Tj1, Ta, Tj2, Td, Tv = self.scurve_profile_no_opt(q0, q1, v0,
+                                                                  v1,
+                                                                  v_max,
+                                                                  _a_max,
+                                                                  j_max)
+
+                _T = Ta + Td + Tv
+                exceptions_in_row = 0
+
+            except PlanningError:
+                exceptions_in_row += 1
+
+            _a_max = a_max*l
+            _it_num += 1
+
+        if _it_num == max_iter:
+            raise PlanningError("Failed to fit trajectory in given time. "
+                                "Exceptions in row: %d" % exceptions_in_row)
+
+        return Tj1, Ta, Tj2, Td, Tv
+
+    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, T=None):
+        # For reverting results
+        self.s = np.sign(q1-q0)
+
+        _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max =\
+            self.__sign_transforms(q0, q1, v0, v1, v_max, a_max, j_max)
+
+        Tj1, Ta, Tj2, Td, Tv = self.scurve_profile_no_opt(_q0, _q1, _v0, _v1,
+                                                          _v_max, _a_max,
+                                                          _j_max)
+
+        T = Ta + Td + Tv
+        tr_func = self.get_trajectory_func(_q0, _q1, _v0, _v1,
+                                           _v_max, _a_max, _j_max,
+                                           Ta, Tj1, Td, Tj2, Tv)
 
         tr = Trajectory()
         tr.time = (T,)
-        tr.trajectory = trajectory
+        tr.trajectory = tr_func
         tr.dof = 1
 
         return tr
