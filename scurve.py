@@ -119,7 +119,7 @@ class ScurvePlanner(TrajectoryPlanner):
 
         return Tj1, Ta, Tj2, Td, Tv
 
-    def get_trajectory_func(self, Ta, Tj1, Td, Tj2, Tv,
+    def get_trajectory_func(self, Tj1, Ta, Tj2, Td, Tv,
                             q0, q1, v0, v1, v_max, a_max, j_max):
         T = Ta + Td + Tv
         a_lim_a = j_max*Tj1
@@ -244,7 +244,7 @@ class ScurvePlanner(TrajectoryPlanner):
             params_list[i][dof] = params[i]
 
     def __get_dof_time(self, params_list, dof):
-        return params_list[0][dof] + params_list[2][dof] + params_list[4][dof]
+        return params_list[1][dof] + params_list[3][dof] + params_list[4][dof]
 
     def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max):
         sh = self._check_shape(q0, q1, v0, v1)
@@ -257,7 +257,7 @@ class ScurvePlanner(TrajectoryPlanner):
         Tj2 = np.zeros(sh)
         Tv = np.zeros(sh)
         trajectory_funcs = []
-        trajectory_params = [Ta, Tj1, Td, Tj2, Tv]
+        trajectory_params = [Tj1, Ta, Tj2, Td, Tv]
 
         max_displacement_id = np.argmax(np.abs(np.subtract(q0, q1)))
         zipped_args = self.__sign_transforms(q0[max_displacement_id],
@@ -267,6 +267,7 @@ class ScurvePlanner(TrajectoryPlanner):
                                              v_max, a_max, j_max)
 
         max_displacement_params = self.scurve_profile_no_opt(*zipped_args)
+        print(max_displacement_params)
 
         self.__put_params(trajectory_params,
                           max_displacement_params,
@@ -275,9 +276,6 @@ class ScurvePlanner(TrajectoryPlanner):
         max_displacement_time = self.__get_dof_time(trajectory_params,
                                                     max_displacement_id)
         T[max_displacement_id] = max_displacement_time
-        print("The longest trajectory id: %d" % max_displacement_id)
-        print("The logest trajectory time: %f" % T[max_displacement_id])
-        print("The longest trajectory params: " + str(max_displacement_params))
 
         for _q0, _q1, _v0, _v1, ii in zip(q0, q1, v0, v1, range(ndof)):
             if ii == max_displacement_id:
@@ -306,16 +304,18 @@ class ScurvePlanner(TrajectoryPlanner):
             T[ii] = Ta[ii] + Td[ii] + Tv[ii]
             self.__put_params(trajectory_params, traj_params, ii)
 
-            for _T, _Ta, _Td, _Tv in zip(T, Ta, Td, Tv):
-                print("T: %f\r\nTa: %f\r\nTd: %f\r\nTv: %f" % (_T, _Ta,
-                                                               _Td, _Tv))
+        for _T, _Ta, _Td, _Tv, _Tj1, _Tj2, dof in zip(T, Ta, Td, Tv,
+                                                      Tj1, Tj2, range(ndof)):
+            print("DOF %d params:\r\n\tT: %f\r\n\ta: %f\r\n\tTd: %f\r\n\t"
+                  "Tv: %f" % (dof, _T, _Ta, _Td, _Tv))
 
-        for dof in range(ndof):
-            for i in range(len(trajectory_params)):
-                tr_func = self.get_trajectory_func(Ta, Tj1, Td, Tj2, Tv,
-                                                   *zipped_args)
+            tr_func = self.get_trajectory_func(_Tj1, _Ta, _Tj2, _Td, _Tv,
+                                               *zipped_args)
+            trajectory_funcs.append(tr_func)
 
-                trajectory_funcs.append(tr_func)
+        print("The longest trajectory id: %d" % max_displacement_id)
+        print("The logest trajectory time: %f" % T[max_displacement_id])
+        print("The longest trajectory params: " + str(max_displacement_params))
 
         tr = Trajectory()
         tr.time = (T[max_displacement_id],)

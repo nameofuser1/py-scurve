@@ -89,8 +89,8 @@ def plot_trajectory(traj, dt):
         for p in range(3):
             r_profiles[d, p, :] = profiles[:, d, p]
 
-    print(r_profiles[0, :, :10])
-    print(profiles[:10, :, :])
+    print(r_profiles[0, :, -10:])
+    print(profiles[-10:, :, :])
 
     fig = plt.figure(0)
     fig.suptitle("DOF profiles")
