@@ -280,5 +280,5 @@ if __name__ == "__main__":
 
     p = ScurvePlanner()
 
-    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, T=3.17)
+    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
     plot_trajectory(tr, 0.01)
