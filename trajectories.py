@@ -23,6 +23,7 @@ class Trajectory(object):
         self._trajectory = None
         self._time = 0
         self._dof = 0
+        self._p_logged = 0
 
     @staticmethod
     def plan_trajectory(x, y, v0, a0, v_max, a_max):
@@ -63,7 +64,14 @@ class Trajectory(object):
     def __call__(self, time):
         point =  np.zeros((self.dof, 3), dtype=np.float32)
         for t, dof in zip(self.trajectory, range(self.dof)):
-            np.put(point[dof], range(3), t(time))
+            dof_point = t(time)
+            np.put(point[dof], range(3), dof_point)
+
+            if self._p_logged < 20:
+                print("DOF {} point number: {}: {}:{}:{}".format(dof,
+                                                                 self._p_logged,
+                                                                 *point[dof]))
+        self._p_logged += 1
 
         return point
 
@@ -77,7 +85,9 @@ def plot_trajectory(traj, dt):
     # profiles[t]           --- profiles for each DOF at time x[t]
     # profiles[t][d]        --- profile for d DOF at time x[t]
     # profiles[t][d][k]     --- accel/vel/pos profile for d DOF at time x[t]
-    profiles = np.asarray([traj(t) for t in time])
+    p_list = [traj(t) for t in time]
+    print(p_list[-10:])
+    profiles = np.asarray(p_list)
 
     # NEED
     # profiles[d]       --- profiles for each DOF 0 <= d <= DOF number
@@ -89,8 +99,10 @@ def plot_trajectory(traj, dt):
         for p in range(3):
             r_profiles[d, p, :] = profiles[:, d, p]
 
-    print(r_profiles[0, :, -10:])
+    print(profiles.shape)
+    print(r_profiles.shape)
     print(profiles[-10:, :, :])
+    print(r_profiles[:, :, -10:])
 
     fig = plt.figure(0)
     fig.suptitle("DOF profiles")
