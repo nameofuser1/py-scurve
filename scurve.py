@@ -186,6 +186,37 @@ class ScurvePlanner(TrajectoryPlanner):
 
         return trajectory
 
+    def __scurve_search_planning(self, q0, q1, v0, v1, v_max, a_max,
+                                 j_max, l=0.9, max_iter=2000, T=None):
+
+        _a_max = a_max
+        it = 0
+
+        while (it < max_iter) and (_a_max > EPSILON):
+            try:
+                Tj1, Ta, Tj2, Td, Tv =\
+                    self.__compute_maximum_speed_not_reached(q0, q1, v0, v1,
+                                                             v_max, _a_max,
+                                                             j_max)
+
+
+                if T is None:
+                    return Tj1, Ta, Tj2, Td, Tv
+
+                if abs(T - Ta - Td - Tv) <= EPSILON:
+                    return Tj1, Ta, Tj2, Td, Tv
+                else:
+                    print("dT: %f" % (T - Ta - Td - Tv))
+                    _a_max *= l
+                    it += 1
+
+            except PlanningError:
+                it += 1
+                _a_max *= l
+
+        raise PlanningError("Failed to find appropriate a_max")
+
+
     def scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
         if self.__scurve_check_possibility(q0, q1, v0, v1, v_max, a_max, j_max):
             try:
@@ -195,51 +226,22 @@ class ScurvePlanner(TrajectoryPlanner):
             except PlanningError as e:
                 print(e)
 
-                Tj1, Ta, Tj2, Td, Tv =\
-                    self.__compute_maximum_speed_not_reached(q0, q1, v0, v1,
-                                                             v_max, a_max,
-                                                             j_max)
+                try:
+                    Tj1, Ta, Tj2, Td, Tv =\
+                        self.__compute_maximum_speed_not_reached(q0, q1, v0, v1,
+                                                                 v_max, a_max,
+                                                                 j_max)
+                except PlanningError as e:
+                    print(e)
+
+                    Tj1, Ta, Tj2, Td, Tv =\
+                        self.__scurve_search_planning(q0, q1, v0, v1, v_max,
+                                                      a_max, j_max)
 
             return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
         else:
             raise PlanningError("Trajectory is not feasible")
-
-    def scurve_profile_const_time(self, T, q0, q1, v0, v1, v_max,
-                                  a_max, j_max, l=0.9, max_iter=2000):
-        _T = 0
-        _a_max = a_max
-        _it_num = 0
-        exceptions_in_row = 0
-
-        while (abs(_T-T) >= EPSILON) and (_a_max >= EPSILON) and\
-                (_it_num < max_iter):
-            try:
-                Tj1, Ta, Tj2, Td, Tv = self.scurve_profile_no_opt(q0, q1, v0,
-                                                                  v1,
-                                                                  v_max,
-                                                                  _a_max,
-                                                                  j_max)
-
-                _T = Ta + Td + Tv
-                exceptions_in_row = 0
-
-            except PlanningError:
-                exceptions_in_row += 1
-
-            _a_max *= l
-            _it_num += 1
-
-        if abs(_T-T) >= EPSILON:
-            raise PlanningError("Failed to fit trajectory in given time.\r\n"
-                                "Exceptions in row: %f\r\n"
-                                "Iterations number: %f\r\n"
-                                "Current acceleration %f"
-                                % (exceptions_in_row, _it_num, _a_max))
-        else:
-            print("_T: %f, T: %f, dT: %f" % (_T, T, abs(_T-T)))
-
-        return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
     def __put_params(self, params_list, params, dof):
         for i in range(params.shape[0]):
@@ -248,7 +250,7 @@ class ScurvePlanner(TrajectoryPlanner):
     def __get_dof_time(self, params_list, dof):
         return params_list[1][dof] + params_list[3][dof] + params_list[4][dof]
 
-    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max):
+    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, T=None):
         sh = self._check_shape(q0, q1, v0, v1)
         ndof = sh[0]
 
@@ -270,7 +272,9 @@ class ScurvePlanner(TrajectoryPlanner):
                                              v1[max_displacement_id],
                                              v_max, a_max, j_max)
 
-        max_displacement_params = self.scurve_profile_no_opt(*zipped_args)
+        # max_displacement_params = self.scurve_profile_const_time(*zipped_args)
+        max_displacement_params = self.__scurve_search_planning(*zipped_args,
+                                                                T=T)
 
         self.__put_params(trajectory_params,
                           max_displacement_params,
@@ -330,15 +334,15 @@ class ScurvePlanner(TrajectoryPlanner):
 
 
 if __name__ == "__main__":
-    q0 = [-2.]
-    q1 = [20.]
-    v0 = [0.]
-    v1 = [2.]
+    q0 = [-2.]  #,  0.]
+    q1 = [20.]  #, 15.]
+    v0 = [0.]  # , 5.]
+    v1 = [2.]  #, 4.]
     v_max = 30.
     a_max = 30.
     j_max = 100.
 
     p = ScurvePlanner()
 
-    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
+    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, T=2.3)
     plot_trajectory(tr, 0.01)
