@@ -35,7 +35,7 @@ class ScurvePlanner(TrajectoryPlanner):
         """
 
         # Acceleration period
-        if (v_max-v0)/j_max < a_max**2:
+        if (v_max-v0)*j_max < a_max**2:
             # a_max is not reached
             Tj1 = np.sqrt((v_max-v0)/j_max)
             Ta = 2*Tj1
@@ -125,6 +125,8 @@ class ScurvePlanner(TrajectoryPlanner):
         a_lim_a = j_max*Tj1
         a_lim_d = -j_max*Tj2
         v_lim = v0 + (Ta-Tj1)*a_lim_a
+
+        print("a_lim_a: %f\r\na_lim_d: %f" % (a_lim_a, a_lim_d))
 
         def trajectory(t):
             # Acceleration phase
@@ -259,7 +261,9 @@ class ScurvePlanner(TrajectoryPlanner):
         trajectory_funcs = []
         trajectory_params = [Tj1, Ta, Tj2, Td, Tv]
 
-        max_displacement_id = np.argmax(np.abs(np.subtract(q0, q1)))
+        dq = np.subtract(q1, q0)
+        max_displacement_id = np.argmax(np.abs(dq))
+        self.s = np.sign(dq[max_displacement_id])
         zipped_args = self.__sign_transforms(q0[max_displacement_id],
                                              q1[max_displacement_id],
                                              v0[max_displacement_id],
@@ -267,7 +271,6 @@ class ScurvePlanner(TrajectoryPlanner):
                                              v_max, a_max, j_max)
 
         max_displacement_params = self.scurve_profile_no_opt(*zipped_args)
-        print(max_displacement_params)
 
         self.__put_params(trajectory_params,
                           max_displacement_params,
@@ -283,7 +286,7 @@ class ScurvePlanner(TrajectoryPlanner):
 
             print("Computing %d DOF trajectory" % ii)
             # For sign transforms
-            self.s = np.sign(q1-q0)
+            self.s = np.sign(_q1-_q0)
 
             zipped_args =\
                 self.__sign_transforms(_q0, _q1, _v0, _v1, v_max, a_max, j_max)
@@ -306,8 +309,9 @@ class ScurvePlanner(TrajectoryPlanner):
 
         for _T, _Ta, _Td, _Tv, _Tj1, _Tj2, dof in zip(T, Ta, Td, Tv,
                                                       Tj1, Tj2, range(ndof)):
-            print("DOF %d params:\r\n\tT: %f\r\n\ta: %f\r\n\tTd: %f\r\n\t"
-                  "Tv: %f" % (dof, _T, _Ta, _Td, _Tv))
+            print("DOF %d params:\r\n\tT: %f\r\n\tTa: %f\r\n\tTj1: %f\r\n\t"
+                  "Td: %f\r\n\tTj2: %f\r\n\tTv: %f" %
+                  (dof, _T, _Ta, _Tj1, _Td, _Tj2, _Tv))
 
             tr_func = self.get_trajectory_func(_Tj1, _Ta, _Tj2, _Td, _Tv,
                                                *zipped_args)
@@ -328,10 +332,10 @@ class ScurvePlanner(TrajectoryPlanner):
 if __name__ == "__main__":
     q0 = [-2.]
     q1 = [20.]
-    v0 = [1.]
-    v1 = [5.]
-    v_max = 20.
-    a_max = 20.
+    v0 = [0.]
+    v1 = [2.]
+    v_max = 30.
+    a_max = 30.
     j_max = 100.
 
     p = ScurvePlanner()
