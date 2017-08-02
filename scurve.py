@@ -189,6 +189,7 @@ class ScurvePlanner(TrajectoryPlanner):
     def __scurve_search_planning(self, q0, q1, v0, v1, v_max, a_max,
                                  j_max, l=0.9, max_iter=2000, T=None):
 
+        print(T)
         _a_max = a_max
         it = 0
 
@@ -244,13 +245,13 @@ class ScurvePlanner(TrajectoryPlanner):
             raise PlanningError("Trajectory is not feasible")
 
     def __put_params(self, params_list, params, dof):
-        for i in range(params.shape[0]):
+        for i in range(len(params)):
             params_list[i][dof] = params[i]
 
     def __get_dof_time(self, params_list, dof):
         return params_list[1][dof] + params_list[3][dof] + params_list[4][dof]
 
-    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, T=None):
+    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, t=None):
         sh = self._check_shape(q0, q1, v0, v1)
         ndof = sh[0]
 
@@ -274,7 +275,7 @@ class ScurvePlanner(TrajectoryPlanner):
 
         # max_displacement_params = self.scurve_profile_const_time(*zipped_args)
         max_displacement_params = self.__scurve_search_planning(*zipped_args,
-                                                                T=T)
+                                                                T=t)
 
         self.__put_params(trajectory_params,
                           max_displacement_params,
@@ -344,5 +345,5 @@ if __name__ == "__main__":
 
     p = ScurvePlanner()
 
-    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, T=2.3)
+    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, t=4.0)
     plot_trajectory(tr, 0.01)
