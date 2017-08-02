@@ -87,9 +87,8 @@ class ScurvePlanner(TrajectoryPlanner):
     def __point_sign_transform(self, p):
         new_p = np.zeros(p.shape, dtype=np.float32)
 
-        for i in range(p.shape[0]):
-            for j in range(p.shape[1]):
-                new_p[i][j] = p[i][j] * self.s
+        for i in range(len(p)):
+            new_p[i] = p[i] * self.s
 
         return new_p
 
@@ -176,10 +175,10 @@ class ScurvePlanner(TrajectoryPlanner):
                 v = v1 + j_max*(tt**2)/2
                 q = q1 - v1*tt - j_max*(tt**3)/6
 
-            point = np.zeros((1, 3), dtype=np.float32)
-            point[0][ACCELERATION_ID] = a
-            point[0][SPEED_ID] = v
-            point[0][POSITION_ID] = q
+            point = np.zeros((3,), dtype=np.float32)
+            point[ACCELERATION_ID] = a
+            point[SPEED_ID] = v
+            point[POSITION_ID] = q
 
             return self.__point_sign_transform(point)
 
@@ -199,7 +198,7 @@ class ScurvePlanner(TrajectoryPlanner):
                                                              v_max, a_max,
                                                              j_max)
 
-            return Tj1, Ta, Tj2, Td, Tv
+            return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
         else:
             raise PlanningError("Trajectory is not feasible")
@@ -238,47 +237,104 @@ class ScurvePlanner(TrajectoryPlanner):
         else:
             print("_T: %f, T: %f, dT: %f" % (_T, T, abs(_T-T)))
 
-        return Tj1, Ta, Tj2, Td, Tv
+        return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
-    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, T=None):
-        # For sign transforms
-        self.s = np.sign(q1-q0)
+    def __put_params(self, params_list, params, dof):
+        for i in range(params.shape[0]):
+            params_list[i][dof] = params[i]
 
-        zipped_args =\
-            self.__sign_transforms(q0, q1, v0, v1, v_max, a_max, j_max)
+    def __get_dof_time(self, params_list, dof):
+        return params_list[0][dof] + params_list[2][dof] + params_list[4][dof]
 
-        if T is None:
-            Tj1, Ta, Tj2, Td, Tv =\
-                self.scurve_profile_no_opt(*zipped_args)
+    def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        sh = self._check_shape(q0, q1, v0, v1)
+        ndof = sh[0]
 
-        else:
-            Tj1, Ta, Tj2, Td, Tv = self.scurve_profile_const_time(T,
-                                                                  *zipped_args)
+        T = np.zeros(sh)
+        Ta = np.zeros(sh)
+        Tj1 = np.zeros(sh)
+        Td = np.zeros(sh)
+        Tj2 = np.zeros(sh)
+        Tv = np.zeros(sh)
+        trajectory_funcs = []
+        trajectory_params = [Ta, Tj1, Td, Tj2, Tv]
 
-        T = Ta + Td + Tv
-        tr_func = self.get_trajectory_func(Ta, Tj1, Td, Tj2, Tv,
-                                           *zipped_args)
+        max_displacement_id = np.argmax(np.abs(np.subtract(q0, q1)))
+        zipped_args = self.__sign_transforms(q0[max_displacement_id],
+                                             q1[max_displacement_id],
+                                             v0[max_displacement_id],
+                                             v1[max_displacement_id],
+                                             v_max, a_max, j_max)
 
-        print("T: %f\r\nTa: %f\r\nTd: %f\r\nTv: %f" % (T, Ta, Td, Tv))
+        max_displacement_params = self.scurve_profile_no_opt(*zipped_args)
+
+        self.__put_params(trajectory_params,
+                          max_displacement_params,
+                          max_displacement_id)
+
+        max_displacement_time = self.__get_dof_time(trajectory_params,
+                                                    max_displacement_id)
+        T[max_displacement_id] = max_displacement_time
+        print("The longest trajectory id: %d" % max_displacement_id)
+        print("The logest trajectory time: %f" % T[max_displacement_id])
+        print("The longest trajectory params: " + str(max_displacement_params))
+
+        for _q0, _q1, _v0, _v1, ii in zip(q0, q1, v0, v1, range(ndof)):
+            if ii == max_displacement_id:
+                continue
+
+            print("Computing %d DOF trajectory" % ii)
+            # For sign transforms
+            self.s = np.sign(q1-q0)
+
+            zipped_args =\
+                self.__sign_transforms(_q0, _q1, _v0, _v1, v_max, a_max, j_max)
+
+            # In case if final velocity is non-zero
+            # We need to synchronize it in time with the trajectory with
+            # the longest execution time
+            if _v1 != 0:
+                traj_params =\
+                    self.scurve_profile_const_time(max_displacement_time,
+                                                   *zipped_args)
+
+            # if final velocity is zero we do not need to worry about
+            # syncronization
+            else:
+                traj_params = self.scurve_profile_no_opt(*zipped_args)
+
+            T[ii] = Ta[ii] + Td[ii] + Tv[ii]
+            self.__put_params(trajectory_params, traj_params, ii)
+
+            for _T, _Ta, _Td, _Tv in zip(T, Ta, Td, Tv):
+                print("T: %f\r\nTa: %f\r\nTd: %f\r\nTv: %f" % (_T, _Ta,
+                                                               _Td, _Tv))
+
+        for dof in range(ndof):
+            for i in range(len(trajectory_params)):
+                tr_func = self.get_trajectory_func(Ta, Tj1, Td, Tj2, Tv,
+                                                   *zipped_args)
+
+                trajectory_funcs.append(tr_func)
 
         tr = Trajectory()
-        tr.time = (T,)
-        tr.trajectory = tr_func
-        tr.dof = 1
+        tr.time = (T[max_displacement_id],)
+        tr.trajectory = trajectory_funcs
+        tr.dof = ndof
 
         return tr
 
 
 if __name__ == "__main__":
-    q0 = -2.
-    q1 = 20.
-    v0 = 1.
-    v1 = 5.
+    q0 = [-2.]
+    q1 = [20.]
+    v0 = [1.]
+    v1 = [5.]
     v_max = 20.
-    a_max = 20
+    a_max = 20.
     j_max = 100.
 
     p = ScurvePlanner()
 
-    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, T=3.17)
+    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
     plot_trajectory(tr, 0.01)

@@ -61,29 +61,36 @@ class Trajectory(object):
         self._trajectory = v
 
     def __call__(self, time):
-        return self.trajectory(time)
+        point =  np.zeros((self.dof, 3), dtype=np.float32)
+        for t, dof in zip(self.trajectory, range(self.dof)):
+            np.put(point[dof], range(3), t(time))
+
+        return point
 
 
 def plot_trajectory(traj, dt):
     dof = traj.dof
-    timesteps = max(traj.time) / dt
+    timesteps = int(max(traj.time) / dt)
     time = np.linspace(0, max(traj.time), timesteps)
 
     # NOW
     # profiles[t]           --- profiles for each DOF at time x[t]
     # profiles[t][d]        --- profile for d DOF at time x[t]
     # profiles[t][d][k]     --- accel/vel/pos profile for d DOF at time x[t]
-    profiles = np.asarray(map(traj.trajectory, time))
+    profiles = np.asarray([traj(t) for t in time])
 
     # NEED
     # profiles[d]       --- profiles for each DOF 0 <= d <= DOF number
     # profiles[d][k]    --- accel/vel/pos profile for DOF d where j
     # profiles[d][k][t] --- accel/vel/pos at time x[k] for DOF i
     # profiles = np.reshape(profiles, (dof, 3, timesteps))
-    r_profiles = np.zeros((dof, 3, int(timesteps)))
+    r_profiles = np.zeros((dof, 3, timesteps))
     for d in range(dof):
         for p in range(3):
             r_profiles[d, p, :] = profiles[:, d, p]
+
+    print(r_profiles[0, :, :10])
+    print(profiles[:10, :, :])
 
     fig = plt.figure(0)
     fig.suptitle("DOF profiles")
