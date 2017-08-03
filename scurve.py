@@ -1,7 +1,11 @@
 import numpy as np
-from trajectories import Trajectory, plot_trajectory, PlanningError, EPSILON
-from trajectories import ACCELERATION_ID, SPEED_ID, POSITION_ID
+from trajectory import Trajectory, plot_trajectory, PlanningError, EPSILON
+from trajectory import ACCELERATION_ID, SPEED_ID, POSITION_ID
 from planner import TrajectoryPlanner
+import logging
+
+
+planning_logger = logging.getLogger("planning_logger")
 
 
 class ScurvePlanner(TrajectoryPlanner):
@@ -239,7 +243,7 @@ class ScurvePlanner(TrajectoryPlanner):
                     self.__compute_maximum_speed_reached(q0, q1, v0, v1,
                                                          v_max, a_max, j_max)
             except PlanningError as e:
-                print(e)
+                planning_logger.warn(e)
 
                 try:
                     Tj1, Ta, Tj2, Td, Tv =\
@@ -247,11 +251,15 @@ class ScurvePlanner(TrajectoryPlanner):
                                                                  v_max, a_max,
                                                                  j_max)
                 except PlanningError as e:
-                    print(e)
+                    planning_logger.warn(e)
 
-                    Tj1, Ta, Tj2, Td, Tv =\
-                        self.__scurve_search_planning(q0, q1, v0, v1, v_max,
-                                                      a_max, j_max)
+                    try:
+                        Tj1, Ta, Tj2, Td, Tv =\
+                            self.__scurve_search_planning(q0, q1, v0, v1, v_max,
+                                                          a_max, j_max)
+                    except PlanningError as e:
+                        planning_logger.warn(e)
+                        raise PlanningError("Trajectory is infeasible")
 
             return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
@@ -285,35 +293,41 @@ class ScurvePlanner(TrajectoryPlanner):
         zipped_args = self.__sign_transforms(q0, q1, v0, v1, v_max, a_max,
                                              j_max)
 
-        print("\r\nPlanning trajectory with given parameters")
-        print("%f %f %f %f %f %f %f" % (q0, q1, v0, v1, v_max, a_max, j_max) +
-              str(T))
-        print("Sign transform result")
-        print("{} {} {} {} {} {} {}".format(*zipped_args))
+        planning_logger.info("Planning trajectory with given parameters")
+        planning_logger.info("%f %f %f %f %f %f %f" %
+                             (q0, q1, v0, v1, v_max, a_max, j_max) +
+                             str(T))
+        planning_logger.debug("Sign transform result")
+        planning_logger.debug("{} {} {} {} {} {} {}".format(*zipped_args))
 
         if T is None:
-            print("Computing Optimal time profile")
+            planning_logger.info("Computing Optimal time profile")
             res = self.__scurve_profile_no_opt(*zipped_args)
         else:
-            print("Computing constant time profile")
+            planning_logger.info("Computing constant time profile")
             res = self.__scurve_search_planning(*zipped_args, T=T)
 
         T = res[1] + res[3] + res[4]
         a_max_c = res[0]*j_max
         a_min_c = a_max_c - res[2]*j_max
-        print("Planning results:\r\n\t"
-              "Maximum acceleration: {}\r\n\t"
-              "Minimum acceleration: {}\r\n\t"
-              "T: {}\r\n\t"
-              "Tj1: {}\r\n\t"
-              "Ta: {}\r\n\t"
-              "Tj2: {}\r\n\t"
-              "Td: {}\r\n\t"
-              "Tv: {}\r\n\t".format(a_max_c, a_min_c, T, *res))
+        planning_logger.info(
+            "Planning results:\r\n\t"
+            "Maximum acceleration: {}\r\n\t"
+            "Minimum acceleration: {}\r\n\t"
+            "T: {}\r\n\t"
+            "Tj1: {}\r\n\t"
+            "Ta: {}\r\n\t"
+            "Tj2: {}\r\n\t"
+            "Td: {}\r\n\t"
+            "Tv: {}\r\n\r\n".format(a_max_c, a_min_c, T, *res))
 
         return res
 
     def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, t=None):
+        planning_logger.info("********************************************"
+                             "\r\n\t"
+                             "NEW TRAJECTORY\r\n"
+                             "********************************************")
         sh = self._check_shape(q0, q1, v0, v1)
         ndof = sh[0]
 
@@ -330,6 +344,10 @@ class ScurvePlanner(TrajectoryPlanner):
         # Calculating params for the longest trajectory
         dq = np.subtract(q1, q0)
         max_displacement_id = np.argmax(np.abs(dq))
+
+        planning_logger.info("Computing the longest DOF trajectory with id"
+                             " %d" % max_displacement_id)
+
         max_displacement_params =\
             self.__plan_trajectory_1D(*task_list[:, max_displacement_id], T=t)
 
@@ -341,15 +359,11 @@ class ScurvePlanner(TrajectoryPlanner):
                                                     max_displacement_id)
         T[max_displacement_id] = max_displacement_time
 
-        print("The longest trajectory id: %d" % max_displacement_id)
-        print("The longest trajectory time: %f" % T[max_displacement_id])
-        print("The longest trajectory params: " + str(max_displacement_params))
-
         for _q0, _q1, _v0, _v1, ii in zip(q0, q1, v0, v1, range(ndof)):
             if ii == max_displacement_id:
                 continue
 
-            print("Computing %d DOF trajectory" % ii)
+            planning_logger.info("Computing %d DOF trajectory" % ii)
 
             # In case if final velocity is non-zero
             # We need to synchronize it in time with the trajectory with
@@ -383,19 +397,3 @@ class ScurvePlanner(TrajectoryPlanner):
         tr.dof = ndof
 
         return tr
-
-
-if __name__ == "__main__":
-    q0 = [-2., 0., 10.]
-    q1 = [20., 15., -10.]
-    v0 = [0., 5., 0.]
-    v1 = [2, 4., 0.]
-    v_max = 30.
-    a_max = 30.
-    j_max = 100.
-    T = None
-
-    p = ScurvePlanner()
-
-    tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, t=T)
-    plot_trajectory(tr, 0.01)
