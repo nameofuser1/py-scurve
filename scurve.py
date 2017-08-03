@@ -203,7 +203,7 @@ class ScurvePlanner(TrajectoryPlanner):
                 v = v1 + j_max*(tt**2)/2
                 q = q1 - v1*tt - j_max*(tt**3)/6
 
-            elif t >= T:
+            else:
                 a = 0
                 v = v1
                 q = q1
@@ -222,7 +222,13 @@ class ScurvePlanner(TrajectoryPlanner):
         zipped_args = self.__sign_transforms(q0, q1, v0, v1, v_max, a_max,
                                              j_max)
 
-        return self.__get_trajectory_func(Tj1, Ta, Tj2, Td, Tv, *zipped_args)
+        traj_func = self.__get_trajectory_func(Tj1, Ta, Tj2,
+                                               Td, Tv, *zipped_args)
+
+        def sign_back_transformed(t):
+            return self.__point_sign_transform(q0, q1, traj_func(t))
+
+        return sign_back_transformed
 
     def __scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
@@ -287,12 +293,10 @@ class ScurvePlanner(TrajectoryPlanner):
 
         if T is None:
             print("Computing Optimal time profile")
-            res = self.__scurve_profile_no_opt(q0, q1, v0, v1, v_max, a_max,
-                                               j_max)
+            res = self.__scurve_profile_no_opt(*zipped_args)
         else:
             print("Computing constant time profile")
-            res = self.__scurve_search_planning(q0, q1, v0, v1, v_max, a_max,
-                                                j_max, T=T)
+            res = self.__scurve_search_planning(*zipped_args, T=T)
 
         T = res[1] + res[3] + res[4]
         a_max_c = res[0]*j_max
@@ -382,10 +386,10 @@ class ScurvePlanner(TrajectoryPlanner):
 
 
 if __name__ == "__main__":
-    q0 = [-2., 0.]
-    q1 = [20., 15.]
-    v0 = [0., 5.]
-    v1 = [2, 4.]
+    q0 = [-2., 0., 10.]
+    q1 = [20., 15., -10.]
+    v0 = [0., 5., 0.]
+    v1 = [2, 4., 0.]
     v_max = 30.
     a_max = 30.
     j_max = 100.
