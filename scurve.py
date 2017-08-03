@@ -90,7 +90,8 @@ class ScurvePlanner(TrajectoryPlanner):
         return Tj1, Ta, Tj2, Td, Tv
 
     def __scurve_search_planning(self, q0, q1, v0, v1, v_max, a_max,
-                                 j_max, l=0.9, max_iter=2000, T=None):
+                                 j_max, l=0.99, max_iter=2000,
+                                 dt_thresh=0.01, T=None):
         """
         """
         _a_max = a_max
@@ -103,11 +104,10 @@ class ScurvePlanner(TrajectoryPlanner):
                                                              v_max, _a_max,
                                                              j_max)
 
-
                 if T is None:
                     return Tj1, Ta, Tj2, Td, Tv
 
-                if abs(T - Ta - Td - Tv) <= EPSILON:
+                if abs(T - Ta - Td - Tv) <= dt_thresh:
                     return Tj1, Ta, Tj2, Td, Tv
                 else:
                     _a_max *= l
@@ -135,7 +135,6 @@ class ScurvePlanner(TrajectoryPlanner):
         _v_max = vs1*v_max + vs2*v_min
         _a_max = vs1*a_max + vs2*a_min
         _j_max = vs1*j_max + vs2*j_min
-
 
         return _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max
 
@@ -197,7 +196,7 @@ class ScurvePlanner(TrajectoryPlanner):
                 q = q1 - (v_lim+v1)*Td/2 + v_lim*tt +\
                     a_lim_d*(3*(tt**2) - 3*Tj2*tt + Tj2**2)/6
 
-            elif T-Tj2 <= t:
+            elif T-Tj2 <= t < T:
                 tt = T-t
 
                 a = -j_max*tt
@@ -208,7 +207,6 @@ class ScurvePlanner(TrajectoryPlanner):
                 a = 0
                 v = v1
                 q = q1
-
 
             point = np.zeros((3,), dtype=np.float32)
             point[ACCELERATION_ID] = a
@@ -225,7 +223,6 @@ class ScurvePlanner(TrajectoryPlanner):
                                              j_max)
 
         return self.__get_trajectory_func(Tj1, Ta, Tj2, Td, Tv, *zipped_args)
-
 
     def __scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
