@@ -14,6 +14,9 @@ class ScurvePlanner(TrajectoryPlanner):
         self.s = 1
 
     def __scurve_check_possibility(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        """
+        Check whether trajectory is feasible. If not raises PlanningError
+        """
         dv = np.abs(v1 - v0)
         dq = np.abs(q1 - q0)
 
@@ -71,11 +74,7 @@ class ScurvePlanner(TrajectoryPlanner):
         """
         For explanation look at page 79 of
             'Trajectory planning for automatic machines and robots(2008)'
-
-        Right now assuming that maximum/minimum accelerations is reached
-            other case is not treated well. TODO: fix it.
         """
-
         # Assuming that a_max/a_min is reached
         Tj1 = Tj2 = Tj = a_max/j_max
         Tv = 0
@@ -97,6 +96,10 @@ class ScurvePlanner(TrajectoryPlanner):
                                  j_max, l=0.99, max_iter=2000,
                                  dt_thresh=0.01, T=None):
         """
+        Trying to achieve requirements with iteratively decreasing maximum
+            possible acceleration.
+
+        Look at 'Trajectory planning for automatic machines and robots(2008)'
         """
         _a_max = a_max
         it = 0
@@ -124,6 +127,11 @@ class ScurvePlanner(TrajectoryPlanner):
         raise PlanningError("Failed to find appropriate a_max")
 
     def __sign_transforms(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        """
+        Sign transforms for being able to calculate trajectory with q1 < q0
+
+        Look at 'Trajectory planning for automatic machines and robots(2008)'
+        """
         v_min = -v_max
         a_min = -a_max
         j_min = -j_max
@@ -143,22 +151,27 @@ class ScurvePlanner(TrajectoryPlanner):
         return _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max
 
     def __point_sign_transform(self, q0, q1, p):
-        new_p = np.zeros(p.shape, dtype=np.float32)
+        """
+        Transforms point back to the original sign
+        """
         s = np.sign(q1-q0)
-
-        for i in range(len(p)):
-            new_p[i] = p[i] * s
-
-        return new_p
+        return s*p
 
     def __get_trajectory_func(self, Tj1, Ta, Tj2, Td, Tv,
                               q0, q1, v0, v1, v_max, a_max, j_max):
+        """
+        Returns function of time given trajectory parameters
+        """
         T = Ta + Td + Tv
         a_lim_a = j_max*Tj1
         a_lim_d = -j_max*Tj2
         v_lim = v0 + (Ta-Tj1)*a_lim_a
 
         def trajectory(t):
+            """
+            Returns numpy array with shape (3,) which contains acceleration,
+                speed and position for a given time t
+            """
             # Acceleration phase
             if 0 <= t < Tj1:
                 a = j_max*t
@@ -217,12 +230,15 @@ class ScurvePlanner(TrajectoryPlanner):
             point[SPEED_ID] = v
             point[POSITION_ID] = q
 
-            return self.__point_sign_transform(q0, q1, point)
+            return point
 
         return trajectory
 
     def __get_trajectory_function(self, q0, q1, v0, v1, v_max, a_max, j_max,
                                   Tj1, Ta, Tj2, Td, Tv):
+        """
+        Returns function wich wrapps trajectory function with sign transforms
+        """
         zipped_args = self.__sign_transforms(q0, q1, v0, v1, v_max, a_max,
                                              j_max)
 
@@ -236,6 +252,12 @@ class ScurvePlanner(TrajectoryPlanner):
 
     def __scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
+        Computes s-curve trajectory parameters which are:
+            Tj1     --- non-zero constant jerk period while accelerating
+            Ta      --- total acceleration period time
+            Tj2     --- non-zero constant jerk period while decelerating
+            Td      --- total deceleration time
+            Tv      --- constant speed time
         """
         if self.__scurve_check_possibility(q0, q1, v0, v1, v_max, a_max, j_max):
             try:
@@ -267,8 +289,6 @@ class ScurvePlanner(TrajectoryPlanner):
             raise PlanningError("Trajectory is not feasible")
 
     def __put_params(self, params_list, params, dof):
-        """
-        """
         for i in range(len(params_list)):
             params_list[i][dof] = params[i]
 
@@ -276,8 +296,6 @@ class ScurvePlanner(TrajectoryPlanner):
         return params_list[1][dof] + params_list[3][dof] + params_list[4][dof]
 
     def __get_traj_params_containers(self, sh):
-        """
-        """
         T = np.zeros(sh)
         Ta = np.zeros(sh)
         Tj1 = np.zeros(sh)
@@ -289,6 +307,9 @@ class ScurvePlanner(TrajectoryPlanner):
 
     def __plan_trajectory_1D(self, q0, q1, v0, v1, v_max, a_max, j_max, T=None):
         """
+        Computes optimal time scurve trajectory or trying to fit it in time T
+
+        returns list of trajecotry parameters
         """
         zipped_args = self.__sign_transforms(q0, q1, v0, v1, v_max, a_max,
                                              j_max)
@@ -324,6 +345,13 @@ class ScurvePlanner(TrajectoryPlanner):
         return res
 
     def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, t=None):
+        """
+        Plan scurve trajectory with give constraints
+
+        returns function of time which returns acceleration, velocity and
+            position for time t
+        """
+
         planning_logger.info("********************************************"
                              "\r\n\t"
                              "NEW TRAJECTORY\r\n"
