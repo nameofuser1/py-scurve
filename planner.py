@@ -10,3 +10,12 @@ class TrajectoryPlanner(object):
     @abstractmethod
     def plan_trajectory(self):
         pass
+
+    def _check_shape(self, *args):
+        sh = len(args[0])
+
+        for arg in args:
+            if sh != len(arg):
+                raise ValueError("All parameters must have the same dimention")
+
+        return (sh,)

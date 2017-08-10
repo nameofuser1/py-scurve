@@ -1,6 +1,6 @@
 import numpy as np
+import logging
 from matplotlib import pyplot as plt
-from constant_time_optimizer import optimize_trajectory
 
 
 ACCELERATION_ID = 0
@@ -9,6 +9,8 @@ POSITION_ID = 2
 
 OPTIMIZER_THRESHOLD = 0.01
 EPSILON = 0.1
+
+trajectory_logger = logging.getLogger("trajectory_logger")
 
 
 class PlanningError(Exception):
@@ -19,22 +21,20 @@ class PlanningError(Exception):
 
 class Trajectory(object):
 
-    def __init__(self):
+    def __init__(self, debug=True):
+        self._debug = debug
         self._trajectory = None
         self._time = 0
         self._dof = 0
+        self._p_logged = 0
 
-    @staticmethod
-    def plan_trajectory(x, y, v0, a0, v_max, a_max):
-        dof, T, trajectory_f = trapezoidal_profile(x, y, v0, a0,
-                                                   v_max, a_max)
+    @property
+    def debug(self):
+        return self._debug
 
-        traj = Trajectory()
-        traj.time = T
-        traj.trajectory = trajectory_f
-        traj.dof = dof
-
-        return traj
+    @debug.setter
+    def debug(self, v):
+        self._debug = v
 
     @property
     def time(self):
@@ -61,26 +61,38 @@ class Trajectory(object):
         self._trajectory = v
 
     def __call__(self, time):
-        return self.trajectory(time)
+        point = np.zeros((self.dof, 3), dtype=np.float32)
+        for t, dof in zip(self.trajectory, range(self.dof)):
+            dof_point = t(time)
+            np.put(point[dof], range(3), dof_point)
+
+            if self.debug:
+                trajectory_logger.debug(
+                    "DOF {} point number: {}: {}:{}:{}".format(dof,
+                                                               self._p_logged,
+                                                               *point[dof]))
+            self._p_logged += 1
+        return point
 
 
 def plot_trajectory(traj, dt):
     dof = traj.dof
-    timesteps = max(traj.time) / dt
+    timesteps = int(max(traj.time) / dt)
     time = np.linspace(0, max(traj.time), timesteps)
 
     # NOW
     # profiles[t]           --- profiles for each DOF at time x[t]
     # profiles[t][d]        --- profile for d DOF at time x[t]
     # profiles[t][d][k]     --- accel/vel/pos profile for d DOF at time x[t]
-    profiles = np.asarray(map(traj.trajectory, time))
+    p_list = [traj(t) for t in time]
+    profiles = np.asarray(p_list)
 
     # NEED
     # profiles[d]       --- profiles for each DOF 0 <= d <= DOF number
     # profiles[d][k]    --- accel/vel/pos profile for DOF d where j
     # profiles[d][k][t] --- accel/vel/pos at time x[k] for DOF i
     # profiles = np.reshape(profiles, (dof, 3, timesteps))
-    r_profiles = np.zeros((dof, 3, int(timesteps)))
+    r_profiles = np.zeros((dof, 3, timesteps))
     for d in range(dof):
         for p in range(3):
             r_profiles[d, p, :] = profiles[:, d, p]
@@ -109,20 +121,3 @@ def plot_trajectory(traj, dt):
 
     plt.tight_layout()
     plt.show()
-
-
-
-
-if __name__ == "__main__":
-    src = [1+0.0, 0.0]
-    dst = [2+0.0, 15.0]
-    a0 = [0+0.0, 0.]
-    v0 = [0+0.0, 0.]
-    a_max = [2+0.0, 3.]
-    v_max = [3+0.0, 5.]
-
-    try:
-        trajectory = Trajectory.plan_trajectory(src, dst, v0, a0, v_max, a_max)
-        plot_trajectory(trajectory, 0.01)
-    except PlanningError as e:
-        print(e)
