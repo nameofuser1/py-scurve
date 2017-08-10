@@ -98,7 +98,7 @@ def plot_trajectory(traj, dt):
             r_profiles[d, p, :] = profiles[:, d, p]
 
     fig = plt.figure(0)
-    fig.suptitle("DOF profiles")
+    # fig.suptitle("DOF profiles")
 
     for i, profile in zip(range(dof), r_profiles):
         plt.subplot(300 + dof*10 + (i+1))
