@@ -30,7 +30,7 @@ if __name__ == "__main__":
     tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
     plot_trajectory(tr, 0.01)
 ```
-![The result is:]("https://ibb.co/fGRida")
+![](docs/figure0.png)
 
 
 Trajectories for several DOFs are automatically synchronized:
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, t=T)
     plot_trajectory(tr, dt=0.01)
 ```
-![Synchronized trajectories](https://ibb.co/bsXOda)
+![Synchronized trajectories](docs/figure1.png)
 
 
 Specify parameter T in order to fit all the trajectories in the same execution time:
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     tr = p.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max, t=T)
     plot_trajectory(tr, dt=0.01)
 ```
-![Trajectories fitted in time](https://ibb.co/nyR5rv)
+![Trajectories fitted in time](docs/figure2.png)
 
 # Synchronization
 Just to make it clear. If trajectory final speed is **0** then it is **NOT** synchronized in time with others and minimum time trajectory is computed. all trajectories with non-zero final velocities are fitted in the same time because non-zero final speed will introduce unwanted displacement if trajectories are not synchronized. Same is true for constant time trajectories(possibly not a good approach for constant time trajectory, will fix it in future builds).
