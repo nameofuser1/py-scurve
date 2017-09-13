@@ -14,6 +14,7 @@ python setup.py install
 ```
 
 # Examples
+- Plan 1-DOF trajectory
 ```python
 from pyscurve import ScurvePlanner, plot_trajectory
 
@@ -33,7 +34,8 @@ if __name__ == "__main__":
 ![Result](docs/figure_0.png)
 
 
-Trajectories for several DOFs are automatically synchronized:
+- Trajectories for several DOFs are automatically synchronized. Assuming that constraints on jerk, acceleration and speed are the same for each DOF:
+
 ```python
 from pyscurve import ScurvePlanner
 from pyscurve import plot_trajectory
@@ -56,7 +58,7 @@ if __name__ == "__main__":
 ![Synchronized trajectories](docs/figure_1.png)
 
 
-Specify parameter T in order to fit all the trajectories in the same execution time:
+- Specify parameter T in order to fit all the trajectories in the same execution time:
 ```python
 from pyscurve import ScurvePlanner
 from pyscurve import plot_trajectory
