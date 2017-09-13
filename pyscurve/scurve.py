@@ -1,5 +1,5 @@
 import numpy as np
-from trajectory import Trajectory, plot_trajectory, PlanningError, EPSILON
+from trajectory import Trajectory, PlanningError, EPSILON
 from trajectory import ACCELERATION_ID, SPEED_ID, POSITION_ID
 from planner import TrajectoryPlanner
 import logging
