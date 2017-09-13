@@ -1,0 +1,5 @@
+setup.py
+py_scurve.egg-info/PKG-INFO
+py_scurve.egg-info/SOURCES.txt
+py_scurve.egg-info/dependency_links.txt
+py_scurve.egg-info/top_level.txt
