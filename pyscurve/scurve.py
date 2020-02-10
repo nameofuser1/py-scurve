@@ -5,12 +5,25 @@ from .planner import TrajectoryPlanner
 import logging
 
 
-planning_logger = logging.getLogger("planning_logger")
+logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+
+planning_logger = logging.getLogger(__name__)
+
+# create console handler and set level to debug
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.INFO)
+
+# planning_logger.addHandler(ch)
 
 
 class ScurvePlanner(TrajectoryPlanner):
 
-    def __init__(self):
+    def __init__(self, debug=False):
+        if debug:
+            planning_logger.setLevel(logging.DEBUG)
+        else:
+            planning_logger.setLevel(logging.CRITICAL)
+            
         self.s = 1
 
     def __scurve_check_possibility(self, q0, q1, v0, v1, v_max, a_max, j_max):
@@ -40,6 +53,7 @@ class ScurvePlanner(TrajectoryPlanner):
         For explanation look at page 79 of
             'Trajectory planning for automatic machines and robots(2008)'
         """
+        planning_logger.info("Computing maximum speed reached profile")
 
         # Acceleration period
         if (v_max-v0)*j_max < a_max**2:
@@ -76,6 +90,8 @@ class ScurvePlanner(TrajectoryPlanner):
             'Trajectory planning for automatic machines and robots(2008)'
         """
         # Assuming that a_max/a_min is reached
+        planning_logger.info("Computing maximum speed not reached profile")
+
         Tj1 = Tj2 = Tj = a_max/j_max
         Tv = 0
 
@@ -86,7 +102,8 @@ class ScurvePlanner(TrajectoryPlanner):
         Ta = (v - 2*v0 + np.sqrt(delta))/(2*a_max)
         Td = (v - 2*v1 + np.sqrt(delta))/(2*a_max)
 
-        if (np.abs(Ta - 2*Tj) < EPSILON) or (np.abs(Td - 2*Tj) < EPSILON):
+        # FIXME: check this condition!
+        if (Ta - 2*Tj < EPSILON) or (Td - 2*Tj < EPSILON):
             raise PlanningError("Maximum acceletaion is not reached. Failed to"
                                 " plan trajectory")
 
@@ -101,6 +118,8 @@ class ScurvePlanner(TrajectoryPlanner):
 
         Look at 'Trajectory planning for automatic machines and robots(2008)'
         """
+        planning_logger.info("Starting search planning")
+
         _a_max = a_max
         it = 0
 
