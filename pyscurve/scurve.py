@@ -102,7 +102,6 @@ class ScurvePlanner(TrajectoryPlanner):
         Ta = (v - 2*v0 + np.sqrt(delta))/(2*a_max)
         Td = (v - 2*v1 + np.sqrt(delta))/(2*a_max)
 
-        # FIXME: check this condition!
         if (Ta - 2*Tj < EPSILON) or (Td - 2*Tj < EPSILON):
             raise PlanningError("Maximum acceletaion is not reached. Failed to"
                                 " plan trajectory")
