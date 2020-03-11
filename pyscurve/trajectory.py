@@ -8,7 +8,7 @@ SPEED_ID = 1
 POSITION_ID = 2
 
 OPTIMIZER_THRESHOLD = 0.01
-EPSILON = 0.1
+EPSILON = 0.0001
 
 trajectory_logger = logging.getLogger("trajectory_logger")
 
