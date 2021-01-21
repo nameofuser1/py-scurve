@@ -416,15 +416,15 @@ class ScurvePlanner(TrajectoryPlanner):
             # the longest execution time
             if _v1 != 0:
                 traj_params =\
-                    self.__plan_trajectory_1D(_q0, _q1, _v0, _v1, a_max,
-                                              v_max, j_max,
+                    self.__plan_trajectory_1D(_q0, _q1, _v0, _v1, v_max,
+                                              a_max, j_max,
                                               T=max_displacement_time)
 
             # if final velocity is zero we do not need to worry about
             # syncronization
             else:
                 traj_params = self.__plan_trajectory_1D(_q0, _q1, _v0, _v1,
-                                                        a_max, v_max, j_max)
+                                                        v_max, a_max, j_max)
 
             T[ii] = Ta[ii] + Td[ii] + Tv[ii]
             self.__put_params(trajectory_params, traj_params, ii)
