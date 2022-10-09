@@ -5,7 +5,8 @@ from .planner import TrajectoryPlanner
 import logging
 
 
-logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+# Elevated from DEBUG to WARNING logger was putting out lots of debug messages
+logging.basicConfig(format='%(message)s', level=logging.WARNING)
 
 planning_logger = logging.getLogger(__name__)
 
@@ -333,8 +334,8 @@ class ScurvePlanner(TrajectoryPlanner):
                                              j_max)
 
         planning_logger.info("Planning trajectory with given parameters")
-        planning_logger.info("%f %f %f %f %f %f %f" %
-                             (q0, q1, v0, v1, v_max, a_max, j_max) +
+        planning_logger.info("q0:%f q1:%f v0:%f v1:%f \nv_max:%f a_max:%f j_max:%f" %
+                             (q0, q1, v0, v1, v_max, a_max, j_max) + ' T:' +
                              str(T))
         planning_logger.debug("Sign transform result")
         planning_logger.debug("{} {} {} {} {} {} {}".format(*zipped_args))
@@ -407,6 +408,14 @@ class ScurvePlanner(TrajectoryPlanner):
 
         for _q0, _q1, _v0, _v1, ii in zip(q0, q1, v0, v1, range(ndof)):
             if ii == max_displacement_id:
+                continue
+            # this axis on the waypoint is the same, therefore zero acceleration
+            # needed
+            elif _q0==_q1:
+                # If there is no change in coordinate, then there should be no
+                # change in velocity.
+                if _v0 != 0 or _v1!=0:
+                    raise PlanningError('Waypoint coordinate is same, but velocity is non-zero.')
                 continue
 
             planning_logger.info("Computing %d DOF trajectory" % ii)
